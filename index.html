@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Как Claude работает с проектом</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Onest:wght@600&display=swap">
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --fg: #1c2330;
+    --muted: #5b6577;
+    --line: #dde1e8;
+    --accent: #0f6f74;
+    --accent-soft: #e3f1f1;
+    --ok: #2e7d32;
+    --bad: #b3261e;
+    --display: "Onest", "IBM Plex Sans", system-ui, sans-serif;
+    --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12161d; --panel: #1a2029; --fg: #e4e8ef; --muted: #98a2b3;
+      --line: #2c3442; --accent: #4fb8bd; --accent-soft: #1d3436;
+      --ok: #7cc983; --bad: #f08a80;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body);
+    font-size: 16px; line-height: 1.6;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding-block: 48px 72px; display: flex; flex-direction: column; gap: 56px; }
+  header { display: flex; flex-direction: column; gap: 12px; max-width: 66ch; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  h1 { font-family: var(--display); font-weight: 600; font-size: clamp(32px, 5vw, 46px); line-height: 1.1; margin: 0; text-wrap: balance; }
+  h2 { font-family: var(--display); font-weight: 600; font-size: 26px; line-height: 1.2; margin: 0; text-wrap: balance; }
+  h3 { font-size: 17px; font-weight: 600; margin: 0; }
+  p { margin: 0; }
+  .lede { color: var(--muted); font-size: 18px; }
+  code { font-family: var(--mono); font-size: .85em; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  section { display: flex; flex-direction: column; gap: 18px; }
+  section > p { max-width: 66ch; }
+  .diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px 16px; overflow-x: auto; }
+  .diagram pre.mermaid { margin: 0; display: flex; justify-content: center; font-family: var(--body); }
+  .diagram pre.mermaid:not([data-processed]) { color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; counter-reset: step; }
+  .steps li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; padding-block: 16px; border-top: 1px solid var(--line); counter-increment: step; }
+  .steps li:first-child { border-top: 0; }
+  .steps li::before { content: counter(step); font-family: var(--display); font-size: 22px; font-weight: 600; color: var(--accent); line-height: 1.3; }
+  .steps li div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .steps li p { color: var(--muted); max-width: 64ch; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .card p { color: var(--muted); font-size: 15px; }
+  .card .where { font-family: var(--mono); font-size: 12px; color: var(--accent); overflow-wrap: anywhere; }
+
+  .rules { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 8px; max-width: 66ch; }
+  .rules li::marker { color: var(--bad); }
+
+  dl.glossary { display: grid; grid-template-columns: minmax(0, 10em) minmax(0, 1fr); gap: 10px 20px; margin: 0; max-width: 72ch; }
+  dl.glossary dt { font-weight: 600; }
+  dl.glossary dd { margin: 0; color: var(--muted); }
+  @media (max-width: 520px) {
+    dl.glossary { grid-template-columns: 1fr; gap: 2px; }
+    dl.glossary dd { margin-bottom: 10px; }
+  }
+  footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">Настройка Claude Code</span>
+    <h1>Как Claude работает с проектом</h1>
+    <p class="lede">Простым языком о том, как Claude настроен в этом репозитории: что он знает ещё до начала работы, какими инструментами пользуется и как доводит задачу из Linear до merge request, готового к ревью.</p>
+  </header>
+
+  <section>
+    <h2>Общая картина</h2>
+    <p>Каждая сессия Claude начинается с одних и тех же знаний о проекте. Сверх этого он может подгрузить дополнительные инструкции под конкретный вид работы и обращаться к внешним сервисам, таким как Linear и Nightwatch.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    K["📘 Общие правила<br/><small>как мы пишем код, тесты,<br/>коммиты и тикеты</small>"]
+    R["📂 Правила для папок<br/><small>доп. правила для моделей,<br/>контроллеров, Vue-файлов…</small>"]
+    S["🧰 Скиллы<br/><small>пошаговые инструкции<br/>для отдельных задач</small>"]
+    T["🔌 Подключённые сервисы<br/><small>Linear, Nightwatch,<br/>Chrome, само приложение</small>"]
+    C(("Claude"))
+    W["✅ Готовая работа<br/><small>код, тесты, коммит<br/>и черновой merge request</small>"]
+
+    K -- "загружаются всегда" --> C
+    R -- "читаются перед правкой<br/>подходящего файла" --> C
+    S -- "подгружаются,<br/>когда нужны" --> C
+    T -- "задачи, ошибки<br/>и база данных" --> C
+    C --> W
+</pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Что Claude знает и чем пользуется</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>Общие правила</h3>
+        <p>Инструкции для всего проекта, которые читает каждая сессия: стиль сообщений коммитов, соглашения по тестам, стандарты PHP, запрещённые команды для базы данных и устройство локального окружения.</p>
+        <span class="where">.ai/guidelines → CLAUDE.md</span>
+      </div>
+      <div class="card">
+        <h3>Правила для папок</h3>
+        <p>Соглашения, которые касаются только определённых файлов: моделей, form request'ов, Vue-компонентов. Индекс подсказывает Claude, какой файл правил прочитать для файла, который он собирается менять.</p>
+        <span class="where">.ai/rules/index.md</span>
+      </div>
+      <div class="card">
+        <h3>Наши скиллы</h3>
+        <p>Инструкции, написанные для этого проекта: выполнение задачи от начала до конца, ревью результата, проверка страницы в браузере, оформление тикетов в нашем стиле и создание detail cards.</p>
+        <span class="where">.ai/skills</span>
+      </div>
+      <div class="card">
+        <h3>Скиллы фреймворков</h3>
+        <p>Руководства по лучшим практикам, которые поставляются с Laravel Boost: Laravel, тестирование, Inertia и Vue, Tailwind, аутентификация и отладка через Debugbar.</p>
+        <span class="where">.claude/skills</span>
+      </div>
+      <div class="card">
+        <h3>Подключённые сервисы</h3>
+        <p><strong>Laravel Boost</strong> позволяет искать по документации, смотреть базу данных и читать логи. <strong>Nightwatch</strong> даёт ошибки с продакшена. В <strong>Linear</strong> и <strong>Scrumpy</strong> лежат задачи. Через <strong>Chrome</strong> Claude пользуется приложением как человек.</p>
+        <span class="where">.mcp.json + настройки пользователя</span>
+      </div>
+      <div class="card">
+        <h3>Помощники</h3>
+        <p>Два специализированных ассистента, которым Claude может передать работу: один делает ревью кода, другой ищет причины ошибок и падающих тестов.</p>
+        <span class="where">.claude/agents</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>От задачи до merge request</h2>
+    <p>Вы даёте Claude номер задачи из Linear (например, <code>F-1234</code>) или номер ошибки из Nightwatch (например, <code>#123</code>). Claude создаёт под неё отдельную копию проекта, работает в ней и возвращается либо с черновым merge request, либо с понятным объяснением, на чём он застрял.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    A(["Вы: «возьми F-1234»"]) --> B["Claude создаёт отдельную<br/>копию проекта<br/><small>своя ветка, база и адрес</small>"]
+    B --> C["В этой копии запускается<br/>новая сессия Claude"]
+    C --> D["Читает задачу или ошибку<br/><small>из Linear или Nightwatch</small>"]
+    D --> E{"Понятно, что значит<br/>«готово»?"}
+    E -- "нет" --> F["Согласует это<br/>с вами"]
+    F --> G
+    E -- "да" --> G["Смотрит страницу<br/>в браузере и читает код"]
+    G --> H["Вносит изменение<br/>и пишет тесты"]
+    H --> I["Форматирует код и запускает<br/>относящиеся к делу тесты"]
+    I --> J["Второй Claude независимо<br/>проверяет изменение"]
+    J -- "есть замечания" --> H
+    J -- "не исправлено<br/>за два круга" --> X(["Застрял<br/><small>работа сохранена, ничего не запушено,<br/>причина записана</small>"])
+    J -- "всё хорошо" --> K["Коммит и короткий<br/>отчёт о запуске"]
+    K --> L["Черновой merge request<br/>и ссылка на него в задаче"]
+    L --> M(["Готово к ревью<br/>человеком"])
+
+    classDef done fill:#d4f4dd,stroke:#2e7d32,color:#1b5e20
+    classDef bad fill:#fde2e2,stroke:#b3261e,color:#7f1d1d
+    classDef you fill:#e3f1f1,stroke:#0f6f74,color:#0b3d40
+    class M done
+    class X bad
+    class A,F you
+</pre>
+    </div>
+
+    <ol class="steps">
+      <li><div><h3>Отдельное рабочее место</h3><p>Каждая задача получает свою копию проекта со своей веткой, базой данных и адресом, поэтому над несколькими задачами можно работать одновременно, и они не мешают друг другу.</p></div></li>
+      <li><div><h3>Разобраться в задаче</h3><p>Claude читает задачу или отчёт об ошибке. Если критерии приёмки размыты, он составляет их сам и согласует с вами до того, как писать код. Баг он сначала пытается воспроизвести в браузере.</p></div></li>
+      <li><div><h3>Минимальное рабочее изменение</h3><p>Claude повторяет устоявшиеся подходы из соседних файлов, следует правилам для затронутых папок и добавляет тесты на новое поведение. Никакого постороннего рефакторинга.</p></div></li>
+      <li><div><h3>Проверить работу</h3><p>Код форматируется автоматически, запускаются тесты, которые покрывают изменение. Изменения во фронтенде дополнительно проверяются в Chrome и записываются в короткий GIF.</p></div></li>
+      <li><div><h3>Взгляд со стороны</h3><p>Отдельный Claude, который не писал этот код и не может его менять, сверяет его с критериями приёмки и правилами проекта. Claude исправляет найденное, но не больше двух раз.</p></div></li>
+      <li><div><h3>Передать дальше</h3><p>Claude делает коммит, пишет короткий отчёт (сколько заняло времени, сколько раз понадобилась ваша помощь, что мешало) и открывает черновой merge request. Merge и деплой всегда остаются за человеком.</p></div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Проверка страницы в браузере</h2>
+    <p>В отдельной копии проекта Claude запускает приложение только на время проверки и потом его останавливает.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    A["Запустить приложение<br/><small>в первый раз<br/>копируется база</small>"] --> B["Открыть страницу<br/>в Chrome"]
+    B --> C["Войти как<br/>тестовый пользователь"]
+    C --> D["Проверить страницу<br/><small>и записать GIF</small>"]
+    D --> E["Остановить приложение<br/><small>база сохраняется</small>"]
+</pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Чего Claude делать нельзя</h2>
+    <ul class="rules">
+      <li>Стирать или сбрасывать базу данных для разработки. Пересоздавать можно только тестовую базу.</li>
+      <li>Пушить в <code>master</code> или трогать ветку <code>acceptance</code>.</li>
+      <li>Мержить merge request'ы или что-либо деплоить.</li>
+      <li>Ослаблять, пропускать или удалять тесты, чтобы проверки прошли.</li>
+      <li>Добавлять в коммит всё сразу. Файлы добавляются по имени, чтобы ничего лишнего не попало.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Как процесс улучшается</h2>
+    <p>Каждый отчёт о запуске заканчивается заметками о том, что усложнило работу: размытая задача, отсутствующее правило, слабые тесты, сломанное окружение. По этим заметкам улучшаются скиллы, общие правила и правила для папок, чтобы следующий запуск прошёл легче.</p>
+  </section>
+
+  <section>
+    <h2>Словарь</h2>
+    <dl class="glossary">
+      <dt>Worktree</dt><dd>Вторая рабочая копия репозитория в своей ветке. Здесь у каждой есть ещё и своя база данных и порт.</dd>
+      <dt>Herdr</dt><dd>Терминальный инструмент, который создаёт worktree и запускает в каждом сессию Claude.</dd>
+      <dt>Скилл</dt><dd>Письменная инструкция, которую Claude загружает под конкретную задачу, например выполнение задачи или проверку страницы.</dd>
+      <dt>MCP-сервер</dt><dd>Подключение, через которое Claude получает доступ к внешней системе, например к Linear или к базе данных приложения.</dd>
+      <dt>Laravel Boost</dt><dd>Пакет для Laravel, который генерирует инструкции для Claude и подключает его к приложению.</dd>
+      <dt>Отчёт о запуске</dt><dd>Короткий лог, который коммитится с каждым запуском и хранится в <code>.ai/factory/runs</code>.</dd>
+    </dl>
+  </section>
+
+  <footer>Составлено по настройкам <code>.ai</code>, <code>.claude</code> и <code>devops</code> в репозитории на 27 октября 2026 года.</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: dark ? 'dark' : 'neutral',
+    securityLevel: 'loose',
+    fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
+    flowchart: { curve: 'basis', htmlLabels: true, padding: 14 },
+  });
+</script>
+</body>
+</html>
